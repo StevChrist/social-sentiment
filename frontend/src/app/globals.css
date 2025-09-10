@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-bg: #0B1628;
+  --color-brand-primary: #0474C4;
+  --color-brand-primary-dark: #036BA3;
+  --color-brand-accent: #4895EF;
+  --color-brand-broken-white: #F5F5F5;
+  --color-brand-secondary: #112240;
+}
+
+@layer base {
+  html, body, #__next {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-brand-bg text-brand-broken-white;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(8,42,78,0.6), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(4,116,196,0.25), transparent 55%),
+      #262B40;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-2xl font-semibold
+           bg-brand-primary text-brand-broken-white shadow-lg transition
+           hover:bg-brand-primary-dark focus:outline-none focus:ring-2 focus:ring-brand-accent/60;
+  }
+
+  .btn-gradient {
+    @apply inline-flex items-center justify-center px-6 rounded-xl font-bold text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out;
+    height: 44px;
+    background: linear-gradient(270deg, #0474C4, #A8C4EC, #0474C4);
+    background-size: 600% 600%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-gradient:hover {
+    background-position: 100% 0;
+    animation: gradient-move 3s ease infinite;
+  }
+
+  .btn-gradient:disabled {
+    @apply opacity-70 cursor-not-allowed;
+  }
+
+  /* Chart containers */
+  .chart-container {
+    @apply bg-white/5 rounded-2xl p-6 backdrop-blur-sm border border-white/10;
+  }
+
+  .chart-title {
+    @apply text-lg font-semibold text-brand-broken-white mb-4 text-center;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  /* Background gradient utama */
+  background: linear-gradient(180deg, #0B1628 0%, #112240 40%, #0B1628 100%);
+  /* Tambahkan aksen radial tipis */
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* Tambahan aksen samar di background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 20% 30%, rgba(72, 149, 239, 0.08), transparent 70%),
+              radial-gradient(circle at 80% 70%, rgba(239, 72, 127, 0.08), transparent 70%);
+  z-index: -1; /* biar tidak nutup konten */
+}
+
+.section-title {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 48px;
+  font-weight: 600;
+  color: #f5f5f5;
+  margin: 0;
+  text-align: center;
+}
+
+/* Animated gradient background for btn-gradient */
+@keyframes gradient-move {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Loading animation */
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(4, 116, 196, 0.6);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(4, 116, 196, 0.8);
+}
