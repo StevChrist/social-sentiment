@@ -79,7 +79,7 @@ class VisualizationService:
                 startangle=90
             )
             
-            ax.set_title('Sentiment Distribution', fontsize=16, pad=20)
+            ax.set_title('', fontsize=16, pad=20)
             
             # Convert to base64
             buffer = BytesIO()
