@@ -266,7 +266,9 @@ export default function QuotaDisplay(): React.ReactElement {
           borderRadius: "8px"
         }}>
           <div style={{ color: "#4895EF", fontWeight: 700, fontSize: "14px" }}>
-            ~{Math.floor(quota.comments_remaining / 1000)}K
+            {quota.comments_remaining >= 1000
+              ? `~${(quota.comments_remaining / 1000).toFixed(1).replace(/\.0$/, '')}K`
+              : `~${quota.comments_remaining}`}
           </div>
           <div style={{ opacity: 0.8 }}>Comments</div>
         </div>

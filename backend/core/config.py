@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     NEUTRAL_THRESHOLD: Optional[float] = Field(default=None, description="Custom neutral threshold")
     
     # API Settings
-    MAX_COMMENTS_LIMIT: int = 10000
+    DAILY_QUOTA_LIMIT: int = 100
+    MAX_COMMENTS_LIMIT: int = 1000
     DEFAULT_MAX_COMMENTS: int = 300
     BATCH_SIZE: int = 32
     MAX_TEXT_LENGTH: int = 160

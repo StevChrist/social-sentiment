@@ -22,7 +22,7 @@ export function Navbar() {
             pointerEvents: "auto",
           }}
         >
-          <Link href="/" className="flex items-center" aria-label="InstaSentiment Home">
+          <Link href="https://stevchrist.site" className="flex items-center" aria-label="InstaSentiment Home">
             <Image
               src="/Logo PEN White.png"
               alt="InstaSentiment Logo"
@@ -60,9 +60,9 @@ export function Navbar() {
               }}
             >
               {/* Jika section ada di halaman yang sama, gunakan anchor #how / #try / #contact */}
-              <li><Link href="/"         style={linkStyle} className="hover:opacity-100">Home</Link></li>
-              <li><Link href="#how"      style={linkStyle} className="hover:opacity-100">How it Works</Link></li>
-              <li><Link href="#try"      style={linkStyle} className="hover:opacity-100">Try!</Link></li>
+              <li><Link href="/" style={linkStyle} className="hover:opacity-100">Home</Link></li>
+              <li><Link href="#how" style={linkStyle} className="hover:opacity-100">How it Works</Link></li>
+              <li><Link href="#try" style={linkStyle} className="hover:opacity-100">Try!</Link></li>
             </ul>
           </div>
         </nav>
