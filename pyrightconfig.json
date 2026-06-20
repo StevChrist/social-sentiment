@@ -1,7 +1,7 @@
 {
   "pythonVersion": "3.14",
   "pythonPlatform": "Windows",
-  "venvPath": ".",
+  "venvPath": "d:/.Portofolio/Coding/social-sentiment",
   "venv": ".venv",
   "include": [
     "backend"

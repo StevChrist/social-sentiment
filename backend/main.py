@@ -559,8 +559,8 @@ def get_quota():
 
     from datetime import datetime, timedelta, timezone
     try:
-        import pytz
-        pacific = pytz.timezone("US/Pacific")
+        from zoneinfo import ZoneInfo
+        pacific = ZoneInfo("US/Pacific")
         now = datetime.now(pacific)
         tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         reset_time = tomorrow.strftime("%Y-%m-%d %H:%M:%S %Z")
