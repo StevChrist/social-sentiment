@@ -314,7 +314,7 @@ def health_check():
 
 # Helper to check daily quota limit
 def _check_quota_or_raise():
-    """Check if daily quota limit of 10000 units is exceeded. Raise 429 if it is."""
+    """Check daily quota limit (from settings.DAILY_QUOTA_LIMIT). Raises HTTP 429 if exceeded."""
     try:
         from backend.db.session import get_db
         from sqlalchemy import func

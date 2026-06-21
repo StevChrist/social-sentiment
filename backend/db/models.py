@@ -1,7 +1,7 @@
 # backend/db/models.py - FIXED VERSION (Compatible with All Python Versions)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, JSON, Float, Date
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional, List
 
 class Base(DeclarativeBase): 
@@ -16,8 +16,8 @@ class Video(Base):
     title: Mapped[Optional[str]] = mapped_column(String(512))              # ✅ Fix: Use Optional[str]
     channel_title: Mapped[Optional[str]] = mapped_column(String(256))      # ✅ Fix: Use Optional[str]
     published_at: Mapped[Optional[str]] = mapped_column(String(64))        # ✅ Fix: Use Optional[str]
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)  # ✅ Fix: Use Optional[datetime]
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=lambda: datetime.now(timezone.utc))  # ✅ Fix: Use Optional[datetime]
     
     # Relationships
     comments: Mapped[List["Comment"]] = relationship(back_populates="video", cascade="all, delete-orphan")
@@ -35,7 +35,7 @@ class Comment(Base):
     commented_at: Mapped[Optional[str]] = mapped_column(String(64))        # ✅ Fix: Use Optional[str]
     is_reply: Mapped[bool] = mapped_column(default=False)
     raw_json: Mapped[Optional[dict]] = mapped_column(JSON)                 # ✅ Fix: Use Optional[dict]
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     video: Mapped["Video"] = relationship(back_populates="comments")
@@ -52,7 +52,7 @@ class Prediction(Base):
     negative_score: Mapped[float] = mapped_column(Float)
     neutral_score: Mapped[float] = mapped_column(Float)
     positive_score: Mapped[float] = mapped_column(Float)
-    predicted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    predicted_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     comment: Mapped["Comment"] = relationship(back_populates="predictions")
@@ -68,4 +68,4 @@ class QuotaUsage(Base):
     user_ip: Mapped[Optional[str]] = mapped_column(String(45))              # ✅ Fix: Use Optional[str]
     session_id: Mapped[Optional[str]] = mapped_column(String(64))           # ✅ Fix: Use Optional[str]
     meta_data: Mapped[Optional[dict]] = mapped_column(JSON)                 # ✅ Fix: Use Optional[dict]
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

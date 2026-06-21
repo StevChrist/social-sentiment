@@ -15,19 +15,25 @@ from backend.db.models import Base
 
 settings = get_settings()
 
+if not settings.DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not configured. "
+        "Set it in your .env file: postgresql+psycopg2://user:pass@host:port/dbname"
+    )
+
 engine = create_engine(
     settings.DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
     future=True,
-    pool_size=10,
-    max_overflow=20
+    pool_size=3,      # Conserved for low-RAM server (8GB, shared with other services)
+    max_overflow=5,   # Max 8 total connections at peak
 )
 
 SessionLocal = sessionmaker(
-    bind=engine, 
-    autoflush=False, 
-    autocommit=False, 
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
     future=True
 )
 
