@@ -136,8 +136,6 @@ The platform is designed to be a practical tool for content creators and researc
 
 <div align="center">
 
-Made with ❤️ by **StevChrist**
-
-[![GitHub](https://img.shields.io/badge/GitHub-StevChrist-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/StevChrist)
+**StevChrist**
 
 </div>
