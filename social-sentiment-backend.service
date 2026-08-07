@@ -1,0 +1,19 @@
+[Unit]
+Description=SocialSentiment FastAPI Backend
+After=network.target docker.service
+
+[Service]
+Type=exec
+User=pen
+Group=pen
+WorkingDirectory=/home/pen/social-sentiment
+Environment="PATH=/home/pen/social-sentiment/.venv/bin"
+Environment="PYTHONPATH=/home/pen/social-sentiment"
+ExecStart=/home/pen/social-sentiment/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8001 --workers 1
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

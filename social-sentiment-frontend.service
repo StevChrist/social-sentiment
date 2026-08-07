@@ -1,0 +1,19 @@
+[Unit]
+Description=SocialSentiment Next.js Frontend
+After=network.target
+
+[Service]
+Type=exec
+User=pen
+Group=pen
+WorkingDirectory=/home/pen/social-sentiment/frontend
+Environment="NODE_ENV=production"
+Environment="PORT=3002"
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
