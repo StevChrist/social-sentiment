@@ -25,7 +25,9 @@ export function Navbar(): React.ReactElement {
   // Check backend & model health periodically
   const checkHealth = async () => {
     try {
-      const res = await fetch("http://localhost:8000/health", { cache: "no-store" });
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+      const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
       if (res.ok) {
         const data: HealthStatus = await res.json();
         setHealth(data);

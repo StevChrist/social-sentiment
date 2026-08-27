@@ -372,6 +372,20 @@ export default function TrySection(): React.ReactElement {
                 </button>
               ))}
             </div>
+            {percentage === 1.0 && (
+              <p
+                style={{
+                  marginTop: "10px",
+                  fontSize: "11px",
+                  color: "#38BDF8",
+                  opacity: 0.9,
+                  textAlign: "center",
+                  letterSpacing: "0.2px",
+                }}
+              >
+                ℹ️ &nbsp;Max 10.000 comments per analysis (100%)
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}

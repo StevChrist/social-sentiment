@@ -195,26 +195,24 @@ def _run_analysis(
         if progress_cb:
             progress_cb(step, pct)
 
-    # ── 1. Fetch video info ──────────────────────────────────────────────────
-    _emit("Fetching video info…", 5)
-    video_info = fetch_video_info(video_id, settings.YOUTUBE_API_KEY)
-    video_title = video_info.get("title", "Unknown Video")
-    channel_title = video_info.get("channel_title", "Unknown Channel")
-    total_comments = video_info.get("comment_count", 0)
-
-    # ── 2. Check Database Cache (Instant Re-use) ────────────────────────────
-    raw_target = int(total_comments * percentage) if total_comments > 0 else 500
-    max_comments = min(raw_target, settings.MAX_COMMENTS_LIMIT)
-
+    # ── 0. PostgreSQL Cache — Instant Re-use (no YouTube / Gemini usage) ──────
     try:
         from backend.db.session import get_session
-        from backend.db.models import Video, Comment, Prediction
+        from backend.db.models import Video, Comment, QuotaUsage
 
         with get_session() as db:
             db_video = db.query(Video).filter_by(video_id=video_id).first()
             if db_video:
+                latest_usage = (
+                    db.query(QuotaUsage)
+                    .filter_by(video_id=video_id, operation_type="analyze")
+                    .order_by(QuotaUsage.id.desc())
+                    .first()
+                )
+                stored_pct = ((latest_usage.meta_data or {}).get("percentage")
+                              if latest_usage else None)
                 db_comments = db.query(Comment).filter_by(video_pk=db_video.id).all()
-                if len(db_comments) >= min(max_comments, max(50, len(db_comments))):
+                if db_comments and (stored_pct is None or stored_pct >= percentage):
                     cached_analyzed = []
                     cached_counts = {"positive": 0, "neutral": 0, "negative": 0}
 
@@ -222,15 +220,6 @@ def _run_analysis(
                         pred_obj = c.predictions[0] if c.predictions else None
                         if pred_obj:
                             lbl = pred_obj.label
-                            pred_dict = {
-                                "label": lbl,
-                                "confidence": pred_obj.confidence,
-                                "scores": {
-                                    "positive": pred_obj.positive_score,
-                                    "neutral": pred_obj.neutral_score,
-                                    "negative": pred_obj.negative_score,
-                                },
-                            }
                             cached_analyzed.append({
                                 "comment_id": c.comment_id,
                                 "text": c.text,
@@ -238,19 +227,32 @@ def _run_analysis(
                                 "published_at": c.commented_at or "",
                                 "like_count": c.like_count or 0,
                                 "is_reply": c.is_reply or False,
-                                "prediction": pred_dict,
+                                "prediction": {
+                                    "label": lbl,
+                                    "confidence": pred_obj.confidence,
+                                    "scores": {
+                                        "positive": pred_obj.positive_score,
+                                        "neutral": pred_obj.neutral_score,
+                                        "negative": pred_obj.negative_score,
+                                    },
+                                },
                             })
                             if lbl in cached_counts:
                                 cached_counts[lbl] += 1
 
                     if cached_analyzed:
-                        _emit(f"⚡ Instant Cache Hit! Loaded {len(cached_analyzed):,} comments from database…", 70)
-                        total_cached = cached_counts["positive"] + cached_counts["neutral"] + cached_counts["negative"]
-                        cached_ratios = {k: (v / total_cached if total_cached > 0 else 0.0) for k, v in cached_counts.items()}
+                        total_cached = sum(cached_counts.values())
+                        cached_ratios = {
+                            k: (v / total_cached if total_cached > 0 else 0.0)
+                            for k, v in cached_counts.items()
+                        }
 
+                        _emit(f"⚡ Instant Cache Hit! Loaded {total_cached:,} comments from PostgreSQL…", 70)
                         _emit("Generating visualizations…", 85)
-                        texts_for_viz = [c["text"] for c in cached_analyzed if c.get("text")]
-                        viz = _viz_service.generate_all(texts_for_viz, cached_counts)
+                        viz = _viz_service.generate_all(
+                            [c["text"] for c in cached_analyzed if c.get("text")],
+                            cached_counts,
+                        )
 
                         examples = []
                         for sentiment in ["positive", "neutral", "negative"]:
@@ -261,19 +263,21 @@ def _run_analysis(
                         processing_time = time.time() - start
                         _emit("Complete!", 100)
 
-                        global _last_analysis_cache
                         _last_analysis_cache = {
                             "video_id": video_id,
                             "percentage": percentage,
                             "comments": cached_analyzed,
                         }
 
-                        logger.info(f"⚡ Served analysis for {video_id} directly from PostgreSQL ({total_cached} comments, {processing_time:.2f}s)")
+                        logger.info(
+                            f"⚡ Served analysis for {video_id} directly from PostgreSQL "
+                            f"({total_cached} comments, {processing_time:.2f}s) — no YouTube/Gemini quota used"
+                        )
                         return {
                             "video_id": video_id,
-                            "video_title": db_video.title or video_title,
-                            "channel_title": db_video.channel_title or channel_title,
-                            "total_comments": total_comments or len(cached_analyzed),
+                            "video_title": db_video.title or "Unknown Video",
+                            "channel_title": db_video.channel_title or "Unknown Channel",
+                            "total_comments": len(cached_analyzed),
                             "actual_analyzed": total_cached,
                             "percentage_analyzed": percentage,
                             "counts": cached_counts,
@@ -281,11 +285,22 @@ def _run_analysis(
                             "examples": examples[:15],
                             "processing_time": round(processing_time, 2),
                             "visualizations": viz,
+                            "from_cache": True,
                         }
     except Exception as e:
         logger.warning(f"Database cache check failed or skipped: {e}")
 
-    # ── 3. Collect comments from YouTube API ──────────────────────────────────
+    # ── 1. Fetch video info ──────────────────────────────────────────────────
+    _emit("Fetching video info…", 5)
+    video_info = fetch_video_info(video_id, settings.YOUTUBE_API_KEY)
+    video_title = video_info.get("title", "Unknown Video")
+    channel_title = video_info.get("channel_title", "Unknown Channel")
+    total_comments = video_info.get("comment_count", 0)
+
+    raw_target = int(total_comments * percentage) if total_comments > 0 else 500
+    max_comments = min(raw_target, settings.MAX_COMMENTS_LIMIT)
+
+    # ── 2. Collect comments from YouTube API ──────────────────────────────────
     _emit("Collecting comments from YouTube…", 15)
     comments = fetch_youtube_comments(
         video_id=video_id,
@@ -331,6 +346,7 @@ def _run_analysis(
     for i, comment in enumerate(comments):
         pred = predictions[i] if i < len(predictions) else {"label": "unclassified", "confidence": None, "scores": None}
         analyzed.append({
+            "comment_id": comment.get("comment_id", "") or str(abs(hash(comment.get("text", "")))),
             "text": comment.get("text", ""),
             "author": comment.get("author", "Anonymous"),
             "published_at": comment.get("published_at", ""),
@@ -746,6 +762,12 @@ def get_quota():
 # ─── Optional: save to DB ────────────────────────────────────────────────────
 def _try_save_to_db(result: Dict) -> None:
     """Save all analyzed comments, predictions, and quota usage into PostgreSQL."""
+    if result.get("from_cache"):
+        logger.info(
+            f"⚡ Skipping persistence for {result.get('video_id')} — served from PostgreSQL cache."
+        )
+        return
+
     try:
         from backend.db.session import get_session
         from backend.db.models import Video, Comment, Prediction, QuotaUsage
