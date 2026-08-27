@@ -1,3 +1,4 @@
+// src/components/TrySection.tsx
 "use client";
 
 import React, { useState, useRef } from "react";
@@ -11,14 +12,15 @@ import {
 import { toast } from "react-toastify";
 import QuotaDisplay from "@/components/QuotaDisplay";
 import StorageMonitor from "@/components/StorageMonitor";
-import Image from "next/image";
+import ScrollReveal from "@/components/ScrollReveal";
+import SentimentChart from "@/components/SentimentChart";
 
 // ── Analysis depth options ────────────────────────────────────────────────────
 const PERCENTAGE_OPTIONS = [
-  { value: 0.25, label: "25%", description: "Quick • Up to 250 comments" },
-  { value: 0.5, label: "50%", description: "Balanced • Up to 500 comments" },
-  { value: 0.75, label: "75%", description: "Deep • Up to 750 comments" },
-  { value: 1.0, label: "100%", description: "Full • Capped at 1k comments" },
+  { value: 0.25, label: "25%", description: "Quick • 25% of all comments" },
+  { value: 0.5, label: "50%", description: "Balanced • 50% of all comments" },
+  { value: 0.75, label: "75%", description: "Deep • 75% of all comments" },
+  { value: 1.0, label: "100%", description: "Full • Up to 10k comments" },
 ];
 
 // ── Analysis steps shown in the loading indicator ─────────────────────────────
@@ -36,26 +38,6 @@ function getStepFromProgress(pct: number): number {
   return 0;
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-const cardStyle: React.CSSProperties = {
-  padding: "16px",
-  borderRadius: "12px",
-  background: "rgba(31, 41, 55, 0.7)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  backdropFilter: "blur(4px)",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "17px",
-  color: "#F5F5F5",
-  fontWeight: 700,
-  marginBottom: "14px",
-  marginTop: "0px",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
 // ── Stat card ─────────────────────────────────────────────────────────────────
 interface StatCardProps {
   label: string;
@@ -68,56 +50,23 @@ function StatCard({ label, count, ratio, accent, icon }: StatCardProps) {
   return (
     <div
       style={{
-        padding: "14px 16px",
-        borderRadius: "12px",
+        padding: "16px",
+        borderRadius: "14px",
         border: `1px solid ${accent}44`,
-        background: `${accent}18`,
+        background: `${accent}14`,
         textAlign: "center",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+        backdropFilter: "blur(8px)",
       }}
     >
-      <div style={{ fontSize: "22px", marginBottom: "4px" }}>{icon}</div>
-      <div style={{ color: "#EAEAEA", fontSize: "13px", opacity: 0.85 }}>{label}</div>
-      <div style={{ fontWeight: 800, fontSize: "20px", color: accent, marginTop: "4px" }}>
+      <div style={{ fontSize: "24px", marginBottom: "4px" }}>{icon}</div>
+      <div style={{ color: "rgba(245,245,245,0.85)", fontSize: "13px", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontWeight: 800, fontSize: "24px", color: accent, marginTop: "4px" }}>
         {count.toLocaleString()}
       </div>
-      <div style={{ color: accent, fontSize: "13px", opacity: 0.8 }}>
+      <div style={{ color: accent, fontSize: "13px", fontWeight: 700, marginTop: "2px" }}>
         {(ratio * 100).toFixed(1)}%
       </div>
-    </div>
-  );
-}
-
-// ── Comment card ─────────────────────────────────────────────────────────────
-interface CommentCardProps {
-  text: string;
-  author: string;
-  accent: string;
-}
-function CommentCard({ text, author, accent }: CommentCardProps) {
-  return (
-    <div
-      style={{
-        marginBottom: "10px",
-        padding: "9px 10px",
-        background: "rgba(255,255,255,0.05)",
-        borderRadius: "8px",
-        borderLeft: `3px solid ${accent}`,
-      }}
-    >
-      <p
-        style={{
-          color: "#F5F5F5",
-          fontSize: "13px",
-          lineHeight: "1.4",
-          margin: "0 0 4px 0",
-          wordBreak: "break-word",
-        }}
-      >
-        &ldquo;{text.slice(0, 100)}{text.length > 100 ? "…" : ""}&rdquo;
-      </p>
-      <small style={{ color: "rgba(245,245,245,0.55)", fontSize: "11px", fontStyle: "italic" }}>
-        — {author}
-      </small>
     </div>
   );
 }
@@ -131,7 +80,6 @@ interface LoadingIndicatorProps {
   percentage: number;
 }
 function LoadingIndicator({ progress, stepLabel, activeStep, elapsed, percentage }: LoadingIndicatorProps) {
-  // Estimate remaining time
   let estRemainingStr = "Estimating...";
   if (elapsed > 0) {
     if (progress >= 10) {
@@ -139,7 +87,6 @@ function LoadingIndicator({ progress, stepLabel, activeStep, elapsed, percentage
       const remaining = Math.max(1, Math.round(estimatedTotal - elapsed));
       estRemainingStr = `~${remaining}s`;
     } else {
-      // Prior-knowledge based estimate for early stages
       const baseEst = percentage === 0.25 ? 10 : percentage === 0.5 ? 20 : percentage === 0.75 ? 30 : 45;
       const remaining = Math.max(1, baseEst - elapsed);
       estRemainingStr = `~${remaining}s`;
@@ -149,220 +96,152 @@ function LoadingIndicator({ progress, stepLabel, activeStep, elapsed, percentage
   return (
     <div
       style={{
-        marginTop: "28px",
+        marginTop: "32px",
         width: "100%",
-        maxWidth: "620px",
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.12)",
+        maxWidth: "640px",
+        padding: "24px",
         borderRadius: "16px",
-        padding: "24px 28px",
+        background: "rgba(17, 34, 64, 0.8)",
+        border: "1px solid rgba(72, 149, 239, 0.3)",
+        boxShadow: "0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(72, 149, 239, 0.15)",
+        backdropFilter: "blur(12px)",
       }}
     >
-      {/* Steps */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "20px" }}>
-        {ANALYSIS_STEPS.map((step, idx) => {
-          const isDone = idx < activeStep;
-          const isActive = idx === activeStep;
-          return (
-            <div
-              key={step.key}
-              style={{ display: "flex", alignItems: "center", gap: "12px", opacity: isDone || isActive ? 1 : 0.35 }}
-            >
-              {/* Circle indicator */}
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "50%",
-                  background: isDone
-                    ? "#10B981"
-                    : isActive
-                    ? "rgba(4,116,196,0.3)"
-                    : "rgba(255,255,255,0.08)",
-                  border: isActive ? "2px solid #0474C4" : isDone ? "2px solid #10B981" : "2px solid rgba(255,255,255,0.15)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "14px",
-                  flexShrink: 0,
-                  transition: "all 0.3s ease",
-                  animation: isActive ? "pulse 1.5s ease-in-out infinite" : "none",
-                }}
-              >
-                {isDone ? "✓" : step.icon}
-              </div>
-              {/* Label */}
-              <div>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: isActive ? 700 : 500,
-                    color: isDone ? "#10B981" : isActive ? "#A8C4EC" : "rgba(245,245,245,0.6)",
-                    transition: "color 0.3s",
-                  }}
-                >
-                  {step.label}
-                </div>
-                {isActive && (
-                  <div style={{ fontSize: "12px", color: "rgba(245,245,245,0.5)", marginTop: "2px" }}>
-                    {stepLabel}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <span style={{ fontSize: "14px", fontWeight: 600, color: "#F5F5F5" }}>
+          {stepLabel || "Analyzing comments…"}
+        </span>
+        <span style={{ fontSize: "14px", fontWeight: 700, color: "#4895EF" }}>
+          {progress}%
+        </span>
       </div>
 
-      {/* Progress bar */}
       <div
         style={{
+          width: "100%",
           height: "8px",
-          background: "rgba(255,255,255,0.1)",
           borderRadius: "4px",
+          background: "rgba(255,255,255,0.1)",
           overflow: "hidden",
+          marginBottom: "16px",
         }}
       >
         <div
           style={{
-            height: "100%",
             width: `${progress}%`,
-            background: "linear-gradient(90deg, #0474C4, #A8C4EC)",
+            height: "100%",
             borderRadius: "4px",
-            transition: "width 0.5s ease",
+            background: "linear-gradient(90deg, #0474C4, #4895EF, #7209B7)",
+            transition: "width 0.4s ease",
+            boxShadow: "0 0 10px rgba(72, 149, 239, 0.8)",
           }}
         />
       </div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: "6px",
-          fontSize: "12px",
-          color: "rgba(245,245,245,0.5)",
-        }}
-      >
-        <span>{stepLabel}</span>
-        <span>{progress}%</span>
+
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "rgba(245,245,245,0.6)" }}>
+        <span>Elapsed: {elapsed}s</span>
+        <span>Est. Remaining: {estRemainingStr}</span>
       </div>
 
-      {/* Time Estimates */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "12px",
-          paddingTop: "12px",
-          borderTop: "1px solid rgba(255,255,255,0.08)",
-          fontSize: "13px",
-          color: "rgba(245,245,245,0.7)",
-        }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          ⏱️ Elapsed: <strong>{elapsed}s</strong>
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          ⏳ Est. Remaining: <strong style={{ color: "#A8C4EC" }}>{estRemainingStr}</strong>
-        </span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginTop: "16px" }}>
+        {ANALYSIS_STEPS.map((step, idx) => {
+          const isDone = progress >= step.maxPct;
+          const isCurrent = activeStep === idx;
+          return (
+            <div
+              key={step.key}
+              style={{
+                padding: "8px 4px",
+                borderRadius: "8px",
+                textAlign: "center",
+                fontSize: "11px",
+                background: isDone
+                  ? "rgba(34, 197, 94, 0.15)"
+                  : isCurrent
+                  ? "rgba(72, 149, 239, 0.2)"
+                  : "rgba(255,255,255,0.03)",
+                border: `1px solid ${
+                  isDone
+                    ? "rgba(34, 197, 94, 0.4)"
+                    : isCurrent
+                    ? "rgba(72, 149, 239, 0.5)"
+                    : "rgba(255,255,255,0.08)"
+                }`,
+                color: isDone ? "#4ADE80" : isCurrent ? "#A8C4EC" : "rgba(245,245,245,0.4)",
+              }}
+            >
+              <div>{step.icon}</div>
+              <div style={{ marginTop: "2px", fontWeight: isCurrent ? 700 : 500 }}>{step.label}</div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Main TrySection Component ─────────────────────────────────────────────────
 export default function TrySection(): React.ReactElement {
   const [url, setUrl] = useState("");
-  const [percentage, setPercentage] = useState(0.5);
-  const [result, setResult] = useState<AnalyzeOut | null>(null);
+  const [percentage, setPercentage] = useState<number>(0.5);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stepLabel, setStepLabel] = useState("");
   const [activeStep, setActiveStep] = useState(0);
-
-  // Time tracking states
-  const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [result, setResult] = useState<AnalyzeOut | null>(null);
 
   const cleanupRef = useRef<(() => void) | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const videoId = result ? extractVideoId(url) : "";
-  const realPercentageAnalyzed = result
-    ? result.actual_analyzed / Math.max(result.total_comments, 1)
-    : 0;
-
-  // Effect to tick the elapsed time every second while analyzing
-  React.useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (submitting && startTime !== null) {
-      timer = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - startTime) / 1000));
-      }, 1000);
-    } else {
-      setElapsed(0);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [submitting, startTime]);
-
-  const onSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
-
     if (!url.trim()) {
-      toast.error("Please enter a YouTube video URL or ID");
+      toast.error("Please enter a YouTube video URL.");
       return;
     }
 
-    setResult(null);
-    setSubmitting(true);
-    setProgress(0);
-    setStepLabel("Checking quota...");
-    setActiveStep(0);
-
-    // Pre-submit check: verify if API quota is already depleted
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      const quotaRes = await fetch(`${API_URL}/api/quota`);
-      if (quotaRes.ok) {
-        const quotaData = await quotaRes.json();
-        if (quotaData.credits_remaining <= 0) {
-          toast.error("Daily API quota limit exceeded. Please try again tomorrow.");
-          setSubmitting(false);
-          setProgress(0);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Quota pre-check failed:", e);
+      extractVideoId(url.trim());
+    } catch {
+      toast.error("Invalid YouTube URL format. Please check the URL.");
+      return;
     }
 
-    setStepLabel("Starting analysis…");
-    setStartTime(Date.now());
+    setSubmitting(true);
+    setProgress(5);
+    setStepLabel("Connecting to YouTube…");
+    setActiveStep(0);
     setElapsed(0);
+    setResult(null);
 
-    toast.info(`Starting ${percentage * 100}% analysis…`, { autoClose: 3000 });
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startTime) / 1000));
+    }, 1000);
 
     cleanupRef.current = streamAnalysis(
-      url,
+      url.trim(),
       percentage,
-      // onProgress
       (evt: ProgressEvent) => {
         setProgress(evt.progress);
         setStepLabel(evt.step);
         setActiveStep(getStepFromProgress(evt.progress));
       },
-      // onResult
       (data: AnalyzeOut) => {
+        if (timerRef.current) clearInterval(timerRef.current);
         setResult(data);
         setSubmitting(false);
         setProgress(100);
         setActiveStep(ANALYSIS_STEPS.length - 1);
-        toast.success("Analysis completed!");
+        const unitsUsed = 1 + Math.ceil((data.actual_analyzed || 100) / 100);
+        if (typeof window !== "undefined" && (window as unknown as { updateQuotaImmediately?: (u: number) => void }).updateQuotaImmediately) {
+          (window as unknown as { updateQuotaImmediately: (u: number) => void }).updateQuotaImmediately(unitsUsed);
+        }
+        toast.success("Analysis completed successfully!");
       },
-      // onError
       (errMsg: string) => {
+        if (timerRef.current) clearInterval(timerRef.current);
         toast.error(errMsg);
         setSubmitting(false);
         setProgress(0);
@@ -372,6 +251,7 @@ export default function TrySection(): React.ReactElement {
 
   const handleCancel = () => {
     if (cleanupRef.current) cleanupRef.current();
+    if (timerRef.current) clearInterval(timerRef.current);
     setSubmitting(false);
     setProgress(0);
     toast.info("Analysis cancelled.");
@@ -383,7 +263,7 @@ export default function TrySection(): React.ReactElement {
     toast.success("Downloading CSV report…");
   };
 
-  const topKeywords = result?.visualizations?.top_keywords?.slice(0, 12) ?? [];
+  const topKeywords = result?.visualizations?.top_keywords?.slice(0, 14) ?? [];
 
   return (
     <section
@@ -401,498 +281,334 @@ export default function TrySection(): React.ReactElement {
     >
       <StorageMonitor />
 
-      <h2 className="section-title" style={{ fontSize: "56px", margin: 0 }}>
-        Try the Social Sentiment
-      </h2>
+      <ScrollReveal variant="fade-up" duration={700}>
+        <h2 className="section-title" style={{ fontSize: "56px", margin: 0 }}>
+          Try the Social Sentiment
+        </h2>
+      </ScrollReveal>
 
-      <p
-        style={{
-          marginTop: "12px",
-          fontSize: "17px",
-          lineHeight: "1.6",
-          color: "rgba(245,245,245,0.8)",
-          maxWidth: "560px",
-        }}
-      >
-        Paste a YouTube video link below, choose analysis depth, and watch the AI
-        analyze sentiment in real time.
-      </p>
+      <ScrollReveal variant="fade-up" delay={150} duration={700}>
+        <p
+          style={{
+            marginTop: "12px",
+            fontSize: "17px",
+            lineHeight: "1.6",
+            color: "rgba(245,245,245,0.8)",
+            maxWidth: "560px",
+          }}
+        >
+          Paste a YouTube video link below, choose analysis depth, and watch the AI
+          analyze sentiment in real time.
+        </p>
+      </ScrollReveal>
 
       {/* ── Form ── */}
-      <form onSubmit={onSubmit} style={{ marginTop: "28px", width: "100%", maxWidth: "720px" }}>
-        {/* URL input */}
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "52px",
-            borderRadius: "14px",
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.18)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.25)",
-            backdropFilter: "blur(6px)",
-            marginBottom: "18px",
-          }}
-        >
-          <input
-            type="text"
-            required
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste your YouTube video URL here…"
-            aria-label="YouTube Video URL"
-            disabled={submitting}
+      <ScrollReveal variant="scale-up" delay={250} duration={700} style={{ width: "100%", maxWidth: "720px" }}>
+        <form onSubmit={onSubmit} style={{ marginTop: "28px", width: "100%" }}>
+          {/* URL Input */}
+          <div
             style={{
-              position: "absolute",
-              inset: 0,
+              position: "relative",
               width: "100%",
-              height: "100%",
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              color: "#F5F5F5",
-              paddingLeft: "22px",
-              paddingRight: "16px",
-              fontSize: "15px",
-              opacity: submitting ? 0.6 : 1,
-              boxSizing: "border-box",
+              height: "52px",
+              borderRadius: "14px",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 30px rgba(0,0,0,0.25)",
+              backdropFilter: "blur(6px)",
+              marginBottom: "18px",
             }}
-          />
-        </div>
-
-        {/* Depth selector */}
-        <div style={{ marginBottom: "20px" }}>
-          <p style={{ color: "rgba(245,245,245,0.75)", fontSize: "14px", marginBottom: "10px" }}>
-            Select analysis depth:
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
-            {PERCENTAGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setPercentage(opt.value)}
-                disabled={submitting}
-                style={{
-                  padding: "10px 8px",
-                  borderRadius: "10px",
-                  border: `2px solid ${percentage === opt.value ? "#0474C4" : "rgba(255,255,255,0.18)"}`,
-                  background:
-                    percentage === opt.value
-                      ? "rgba(4,116,196,0.22)"
-                      : "rgba(255,255,255,0.04)",
-                  color:
-                    percentage === opt.value ? "#A8C4EC" : "rgba(245,245,245,0.75)",
-                  fontSize: "14px",
-                  fontWeight: percentage === opt.value ? 700 : 500,
-                  cursor: submitting ? "not-allowed" : "pointer",
-                  transition: "all 0.2s ease",
-                  opacity: submitting ? 0.5 : 1,
-                }}
-              >
-                <div style={{ fontSize: "17px", marginBottom: "2px" }}>{opt.label}</div>
-                <div style={{ fontSize: "10px", opacity: 0.7 }}>{opt.description}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Submit / Cancel */}
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }}>
-          <button
-            type="submit"
-            className="btn-gradient"
-            style={{
-              height: "48px",
-              padding: "0 28px",
-              borderRadius: "12px",
-              fontWeight: 700,
-              cursor: submitting ? "not-allowed" : "pointer",
-              opacity: submitting ? 0.7 : 1,
-              transition: "opacity 160ms ease",
-              border: "none",
-            }}
-            disabled={submitting}
           >
-            {submitting ? "Analyzing…" : `Analyze (${percentage * 100}%)`}
-          </button>
+            <input
+              type="text"
+              required
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste your YouTube video URL here…"
+              aria-label="YouTube Video URL"
+              disabled={submitting}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                color: "#F5F5F5",
+                paddingLeft: "22px",
+                paddingRight: "16px",
+                fontSize: "15px",
+                opacity: submitting ? 0.6 : 1,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
 
-          {submitting && (
+          {/* Depth Selector */}
+          <div style={{ marginBottom: "20px" }}>
+            <p style={{ color: "rgba(245,245,245,0.75)", fontSize: "14px", marginBottom: "10px" }}>
+              Select analysis depth:
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+              {PERCENTAGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPercentage(opt.value)}
+                  disabled={submitting}
+                  style={{
+                    padding: "10px 6px",
+                    borderRadius: "10px",
+                    border: percentage === opt.value ? "2px solid #4895EF" : "1px solid rgba(255,255,255,0.15)",
+                    background: percentage === opt.value ? "rgba(72, 149, 239, 0.25)" : "rgba(255,255,255,0.04)",
+                    color: percentage === opt.value ? "#FFFFFF" : "rgba(245,245,245,0.7)",
+                    cursor: submitting ? "not-allowed" : "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "16px", fontWeight: 700 }}>{opt.label}</div>
+                  <div style={{ fontSize: "10px", opacity: 0.7, marginTop: "2px" }}>{opt.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }}>
             <button
-              type="button"
-              onClick={handleCancel}
+              type="submit"
+              className="btn-gradient"
               style={{
                 height: "48px",
-                padding: "0 20px",
+                padding: "0 28px",
                 borderRadius: "12px",
-                fontWeight: 600,
-                background: "rgba(239,68,68,0.15)",
-                border: "1px solid rgba(239,68,68,0.4)",
-                color: "#F87171",
-                cursor: "pointer",
-                fontSize: "14px",
+                fontWeight: 700,
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.7 : 1,
+                border: "none",
               }}
+              disabled={submitting}
             >
-              Cancel
+              {submitting ? "Analyzing…" : `Analyze (${percentage * 100}%)`}
             </button>
-          )}
-        </div>
 
-        <p style={{ marginTop: "16px", fontSize: "13px", color: "rgba(245,245,245,0.5)" }}>
-          Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-        </p>
+            {submitting && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                style={{
+                  height: "48px",
+                  padding: "0 20px",
+                  borderRadius: "12px",
+                  fontWeight: 600,
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1px solid rgba(239,68,68,0.4)",
+                  color: "#F87171",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
 
-        <div style={{ maxWidth: "720px", width: "100%" }}>
-          <QuotaDisplay />
-        </div>
-      </form>
+          <p style={{ marginTop: "16px", fontSize: "13px", color: "rgba(245,245,245,0.5)" }}>
+            Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+          </p>
 
-      {/* ── Loading indicator ── */}
+          <div style={{ maxWidth: "720px", width: "100%", marginTop: "12px" }}>
+            <QuotaDisplay />
+          </div>
+        </form>
+      </ScrollReveal>
+
+      {/* ── Loading Progress Indicator ── */}
       {submitting && (
-        <LoadingIndicator progress={progress} stepLabel={stepLabel} activeStep={activeStep} elapsed={elapsed} percentage={percentage} />
+        <LoadingIndicator
+          progress={progress}
+          stepLabel={stepLabel}
+          activeStep={activeStep}
+          elapsed={elapsed}
+          percentage={percentage}
+        />
       )}
 
-      {/* ── Results ── */}
+      {/* ── Results Display ── */}
       {result && !submitting && (
-        <div
-          style={{
-            marginTop: "32px",
-            width: "100%",
-            maxWidth: "1200px",
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "18px",
-            padding: "28px",
-            textAlign: "left",
-          }}
-        >
-          {/* ── Header + Download ── */}
+        <ScrollReveal variant="blur-in" duration={600} style={{ width: "100%", maxWidth: "1080px", marginTop: "36px" }}>
           <div
             style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "12px",
-              marginBottom: "8px",
+              width: "100%",
+              background: "rgba(17, 34, 64, 0.7)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "20px",
+              padding: "32px",
+              textAlign: "left",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.35)",
+              backdropFilter: "blur(14px)",
             }}
           >
-            <div>
-              <div style={headerStyle}>📹 {result.video_title}</div>
-              <div style={{ fontSize: "13px", color: "rgba(245,245,245,0.7)", marginBottom: "4px" }}>
-                📺 {result.channel_title}
-              </div>
-              <div style={{ fontSize: "13px", color: "rgba(245,245,245,0.6)" }}>
-                Analyzed&nbsp;
-                <strong style={{ color: "#A8C4EC" }}>
-                  {result.actual_analyzed.toLocaleString()}
-                </strong>
-                &nbsp;comments&nbsp;(
-                {(realPercentageAnalyzed * 100).toFixed(1)}% of{" "}
-                {result.total_comments.toLocaleString()} total)
-              </div>
-
-              {/* Model Performance Badge */}
-              <div style={{ 
-                marginTop: "12px", 
-                padding: "8px 12px", 
-                background: "rgba(255,255,255,0.03)", 
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: "8px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "12px",
-                fontSize: "12px", 
-                color: "rgba(245,245,245,0.7)",
-                flexWrap: "wrap"
-              }}>
-                <span style={{ fontWeight: 600, color: "#A8C4EC", display: "flex", alignItems: "center", gap: "4px" }}>
-                  🤖 Model Performance:
-                </span>
-                <span>Accuracy: <strong style={{ color: "#10B981" }}>83.3%</strong> (Validation)</span>
-                <span style={{ opacity: 0.3 }}>|</span>
-                <span>Macro F1: <strong style={{ color: "#10B981" }}>82.3%</strong></span>
-                <span style={{ opacity: 0.3 }}>|</span>
-                <span>Test Accuracy: <strong style={{ color: "#F59E0B" }}>71.9%</strong></span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleDownload}
+            {/* Header + Download Action */}
+            <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "7px",
-                padding: "10px 18px",
-                borderRadius: "10px",
-                background: "rgba(4,116,196,0.18)",
-                border: "1px solid rgba(4,116,196,0.45)",
-                color: "#A8C4EC",
-                fontWeight: 600,
-                fontSize: "14px",
-                cursor: "pointer",
-                transition: "background 0.2s",
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "16px",
+                marginBottom: "24px",
+                paddingBottom: "20px",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
               }}
             >
-              ⬇ Download CSV
-            </button>
-          </div>
+              <div>
+                <h3 style={{ fontSize: "22px", fontWeight: 700, color: "#F5F5F5", margin: "0 0 6px 0" }}>
+                  📹 {result.video_title}
+                </h3>
+                <p style={{ fontSize: "14px", color: "rgba(245,245,245,0.7)", margin: "0 0 10px 0" }}>
+                  📺 {result.channel_title} &nbsp;·&nbsp; Total comments: {result.total_comments.toLocaleString()} &nbsp;·&nbsp;
+                  Analyzed: <strong style={{ color: "#4895EF" }}>{result.actual_analyzed.toLocaleString()}</strong> ({((result.actual_analyzed / Math.max(1, result.total_comments)) * 100).toFixed(1)}%)
+                </p>
 
-          {/* ── Stat cards ── */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "12px",
-              marginTop: "20px",
-              marginBottom: "28px",
-            }}
-          >
-            <StatCard
-              label="Positive"
-              count={result.counts.positive}
-              ratio={result.ratios.positive}
-              accent="#10B981"
-              icon="😊"
-            />
-            <StatCard
-              label="Neutral"
-              count={result.counts.neutral}
-              ratio={result.ratios.neutral}
-              accent="#F59E0B"
-              icon="😐"
-            />
-            <StatCard
-              label="Negative"
-              count={result.counts.negative}
-              ratio={result.ratios.negative}
-              accent="#EF4444"
-              icon="😞"
-            />
-          </div>
-
-          {/* ── Visualizations row ── */}
-          <div style={{ ...headerStyle, marginTop: "0" }}>📊 Visualizations</div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "16px",
-              marginBottom: "20px",
-            }}
-          >
-            {/* Word Cloud */}
-            {result.visualizations?.wordcloud_base64 && (
-              <div style={cardStyle}>
-                <h4
-                  style={{ color: "#F5F5F5", fontSize: "15px", marginBottom: "10px", fontWeight: 600 }}
+                {/* Model Badge */}
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "6px 14px",
+                    borderRadius: "20px",
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    fontSize: "12px",
+                    color: "rgba(245,245,245,0.8)",
+                  }}
                 >
-                  🌟 Word Cloud
-                </h4>
-                <Image
-                  src={result.visualizations.wordcloud_base64}
-                  alt="Word Cloud"
-                  width={500}
-                  height={240}
-                  style={{ width: "100%", height: "auto", borderRadius: "8px", objectFit: "contain" }}
-                />
+                  <span style={{ color: "#4895EF", fontWeight: 600 }}>🤖 Engine: Google Gemini 3.5 Flash-Lite</span>
+                  <span style={{ opacity: 0.3 }}>|</span>
+                  <span>Accuracy: <strong style={{ color: "#22C55E" }}>83.3%</strong></span>
+                  <span style={{ opacity: 0.3 }}>|</span>
+                  <span>Macro F1: <strong style={{ color: "#22C55E" }}>82.3%</strong></span>
+                </div>
               </div>
-            )}
 
-            {/* Pie Chart */}
-            {result.visualizations?.pie_chart_base64 && (
-              <div style={cardStyle}>
-                <h4
-                  style={{ color: "#F5F5F5", fontSize: "15px", marginBottom: "10px", fontWeight: 600 }}
-                >
-                  🥧 Sentiment Distribution
-                </h4>
-                <Image
-                  src={result.visualizations.pie_chart_base64}
-                  alt="Sentiment Pie Chart"
-                  width={500}
-                  height={240}
-                  style={{ width: "100%", height: "auto", borderRadius: "8px", objectFit: "contain" }}
-                />
-              </div>
-            )}
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="btn-gradient"
+                style={{
+                  height: "44px",
+                  padding: "0 22px",
+                  fontSize: "13px",
+                  borderRadius: "10px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  border: "none",
+                }}
+              >
+                <span>📥</span>
+                <span>Download CSV Report</span>
+              </button>
+            </div>
 
-            {/* Bar Chart */}
-            {result.visualizations?.bar_chart_base64 && (
-              <div style={cardStyle}>
-                <h4
-                  style={{ color: "#F5F5F5", fontSize: "15px", marginBottom: "10px", fontWeight: 600 }}
-                >
-                  📊 Comment Counts
-                </h4>
-                <Image
-                  src={result.visualizations.bar_chart_base64}
-                  alt="Sentiment Bar Chart"
-                  width={500}
-                  height={240}
-                  style={{ width: "100%", height: "auto", borderRadius: "8px", objectFit: "contain" }}
-                />
-              </div>
-            )}
+            {/* 3 Stat Cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <StatCard
+                label="Positive Sentiment"
+                count={result.counts.positive}
+                ratio={result.ratios.positive}
+                accent="#22C55E"
+                icon="😊"
+              />
+              <StatCard
+                label="Neutral Sentiment"
+                count={result.counts.neutral}
+                ratio={result.ratios.neutral}
+                accent="#F59E0B"
+                icon="😐"
+              />
+              <StatCard
+                label="Negative Sentiment"
+                count={result.counts.negative}
+                ratio={result.ratios.negative}
+                accent="#EF4444"
+                icon="😡"
+              />
+            </div>
 
-            {/* Top Keywords */}
+            {/* Top Keywords Pills */}
             {topKeywords.length > 0 && (
-              <div style={cardStyle}>
-                <h4
-                  style={{ color: "#F5F5F5", fontSize: "15px", marginBottom: "12px", fontWeight: 600 }}
-                >
+              <div style={{ marginBottom: "28px" }}>
+                <div style={{ fontSize: "14px", color: "rgba(245,245,245,0.75)", marginBottom: "10px", fontWeight: 600 }}>
                   🏷️ Top Keywords
-                </h4>
+                </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                  {topKeywords.map((kw, i) => {
-                    const maxFreq = topKeywords[0]?.frequency ?? 1;
-                    const intensity = 0.4 + 0.6 * (kw.frequency / maxFreq);
-                    return (
-                      <span
-                        key={kw.word}
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: "20px",
-                          background: `rgba(4,116,196,${intensity * 0.3})`,
-                          border: `1px solid rgba(4,116,196,${intensity * 0.5})`,
-                          color: `rgba(168,196,236,${0.6 + 0.4 * intensity})`,
-                          fontSize: `${11 + Math.round(intensity * 4)}px`,
-                          fontWeight: i < 3 ? 700 : 500,
-                          whiteSpace: "nowrap",
-                        }}
-                        title={`${kw.frequency} mentions`}
-                      >
-                        {kw.word}
-                      </span>
-                    );
-                  })}
+                  {topKeywords.map((kw, i) => (
+                    <span
+                      key={kw.word || `kw-${i}`}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "20px",
+                        background: "rgba(72, 149, 239, 0.15)",
+                        border: "1px solid rgba(72, 149, 239, 0.3)",
+                        color: "#A8C4EC",
+                        fontSize: "12px",
+                        fontWeight: i < 3 ? 700 : 500,
+                      }}
+                    >
+                      {kw.word} <span style={{ opacity: 0.6 }}>({kw.frequency})</span>
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
-          </div>
 
-          {/* ── Sample Comments ── */}
-          <div style={{ ...headerStyle, marginTop: "8px" }}>💬 Sample Comments</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
-            {/* Positive */}
+            {/* Visualizations Grid & Sample Comments via SentimentChart */}
+            <SentimentChart
+              data={{ counts: result.counts, ratios: result.ratios }}
+              wordCloudImage={
+                result.visualizations?.wordcloud_base64
+                  ? result.visualizations.wordcloud_base64.startsWith("data:")
+                    ? result.visualizations.wordcloud_base64
+                    : `data:image/png;base64,${result.visualizations.wordcloud_base64}`
+                  : undefined
+              }
+              examples={result.examples.map((ex) => ({
+                id: ex.text.slice(0, 16),
+                author: ex.author,
+                text: ex.text,
+                sentiment: ex.prediction.label as "positive" | "neutral" | "negative",
+              }))}
+            />
+
+            {/* Processing Time Footer */}
             <div
               style={{
-                ...cardStyle,
-                background: "rgba(16,185,129,0.12)",
-                border: "1px solid rgba(16,185,129,0.28)",
-                maxHeight: "240px",
-                overflowY: "auto",
+                marginTop: "24px",
+                padding: "12px 16px",
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: "10px",
+                fontSize: "12px",
+                color: "rgba(245,245,245,0.55)",
+                textAlign: "center",
+                border: "1px solid rgba(255,255,255,0.06)",
               }}
             >
-              <h4
-                style={{
-                  color: "#10B981",
-                  fontSize: "13px",
-                  marginBottom: "10px",
-                  fontWeight: 700,
-                  textAlign: "center",
-                }}
-              >
-                😊 Positive
-              </h4>
-              {result.examples
-                .filter((c) => c.prediction.label === "positive")
-                .slice(0, 4)
-                .map((c, i) => (
-                  <CommentCard key={`pos-${i}`} text={c.text} author={c.author} accent="#10B981" />
-                ))}
-              {result.examples.filter((c) => c.prediction.label === "positive").length === 0 && (
-                <p style={{ color: "rgba(245,245,245,0.4)", fontSize: "13px", fontStyle: "italic" }}>
-                  No positive comments in sample
-                </p>
-              )}
-            </div>
-
-            {/* Neutral */}
-            <div
-              style={{
-                ...cardStyle,
-                background: "rgba(245,158,11,0.12)",
-                border: "1px solid rgba(245,158,11,0.28)",
-                maxHeight: "240px",
-                overflowY: "auto",
-              }}
-            >
-              <h4
-                style={{
-                  color: "#F59E0B",
-                  fontSize: "13px",
-                  marginBottom: "10px",
-                  fontWeight: 700,
-                  textAlign: "center",
-                }}
-              >
-                😐 Neutral
-              </h4>
-              {result.examples
-                .filter((c) => c.prediction.label === "neutral")
-                .slice(0, 4)
-                .map((c, i) => (
-                  <CommentCard key={`neu-${i}`} text={c.text} author={c.author} accent="#F59E0B" />
-                ))}
-              {result.examples.filter((c) => c.prediction.label === "neutral").length === 0 && (
-                <p style={{ color: "rgba(245,245,245,0.4)", fontSize: "13px", fontStyle: "italic" }}>
-                  No neutral comments in sample
-                </p>
-              )}
-            </div>
-
-            {/* Negative */}
-            <div
-              style={{
-                ...cardStyle,
-                background: "rgba(239,68,68,0.12)",
-                border: "1px solid rgba(239,68,68,0.28)",
-                maxHeight: "240px",
-                overflowY: "auto",
-              }}
-            >
-              <h4
-                style={{
-                  color: "#EF4444",
-                  fontSize: "13px",
-                  marginBottom: "10px",
-                  fontWeight: 700,
-                  textAlign: "center",
-                }}
-              >
-                😞 Negative
-              </h4>
-              {result.examples
-                .filter((c) => c.prediction.label === "negative")
-                .slice(0, 4)
-                .map((c, i) => (
-                  <CommentCard key={`neg-${i}`} text={c.text} author={c.author} accent="#EF4444" />
-                ))}
-              {result.examples.filter((c) => c.prediction.label === "negative").length === 0 && (
-                <p style={{ color: "rgba(245,245,245,0.4)", fontSize: "13px", fontStyle: "italic" }}>
-                  No negative comments in sample
-                </p>
-              )}
+              ⏱ Analysis completed in {result.processing_time.toFixed(2)} seconds &nbsp;·&nbsp;
+              Gemini 3.5 Flash-Lite model &nbsp;·&nbsp; {result.actual_analyzed.toLocaleString()} comments analyzed
             </div>
           </div>
-
-          {/* ── Footer ── */}
-          <div
-            style={{
-              marginTop: "20px",
-              padding: "10px 16px",
-              background: "rgba(255,255,255,0.04)",
-              borderRadius: "8px",
-              fontSize: "12px",
-              color: "rgba(245,245,245,0.5)",
-              textAlign: "center",
-            }}
-          >
-            ⏱ Analysis completed in {result.processing_time.toFixed(2)} seconds &nbsp;·&nbsp;
-            XLM-RoBERTa model &nbsp;·&nbsp; {result.actual_analyzed.toLocaleString()} comments processed
-          </div>
-        </div>
+        </ScrollReveal>
       )}
     </section>
   );

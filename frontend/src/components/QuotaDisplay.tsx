@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 
 interface QuotaData {
+  period?: string;
+  monthly_limit?: number;
   daily_limit: number;
   estimated_used: number;
   estimated_remaining: number;
@@ -84,16 +86,28 @@ export default function QuotaDisplay(): React.ReactElement {
     };
   }, [immediateQuotaReduce]);
 
+  const getEffectiveLimit = () => {
+    if (!quota) return 3000;
+    return quota.monthly_limit || quota.daily_limit || 3000;
+  };
+
   const getUsagePercentage = () => {
     if (!quota) return 0;
-    return Math.round((quota.estimated_used / quota.daily_limit) * 100);
+    const pct = (quota.estimated_used / getEffectiveLimit()) * 100;
+    return Math.min(100, Math.round(pct * 10) / 10);
+  };
+
+  const getBarDisplayWidth = () => {
+    const pct = getUsagePercentage();
+    if (pct === 0) return 0;
+    return Math.max(3, pct);
   };
 
   const getUsageColor = () => {
     const percentage = getUsagePercentage();
     if (percentage >= 90) return '#EF4444';
     if (percentage >= 70) return '#F59E0B';
-    if (percentage >= 50) return '#10B981';
+    if (percentage >= 40) return '#4895EF';
     return '#22C55E';
   };
 
@@ -192,15 +206,20 @@ export default function QuotaDisplay(): React.ReactElement {
         <span style={{ 
           color: "rgba(245,245,245,0.9)", 
           fontSize: "13px", 
-          fontWeight: 600 
+          fontWeight: 600,
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
         }}>
-          🔥 API Credits
+          <span>🔥</span>
+          <span>Monthly Free Tier Credits</span>
         </span>
         <span style={{ 
-          color: "rgba(245,245,245,0.5)", 
-          fontSize: "10px"
+          color: "rgba(72, 149, 239, 0.9)", 
+          fontSize: "11px",
+          fontWeight: 600
         }}>
-          Live
+          {quota.estimated_used} / {getEffectiveLimit()} units
         </span>
       </div>
 
@@ -209,32 +228,33 @@ export default function QuotaDisplay(): React.ReactElement {
         <div 
           style={{
             width: "100%",
-            height: "6px",
-            background: "rgba(255,255,255,0.1)",
-            borderRadius: "3px",
-            overflow: "hidden"
+            height: "8px",
+            background: "rgba(255,255,255,0.08)",
+            borderRadius: "4px",
+            overflow: "hidden",
+            boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)"
           }}
         >
           <div
             style={{
-              width: `${getUsagePercentage()}%`,
+              width: `${getBarDisplayWidth()}%`,
               height: "100%",
-              background: `linear-gradient(90deg, ${getUsageColor()}, ${getUsageColor()}AA)`,
-              borderRadius: "3px",
-              transition: "width 0.5s ease"
+              background: `linear-gradient(90deg, ${getUsageColor()}, #4895EF)`,
+              borderRadius: "4px",
+              boxShadow: `0 0 10px ${getUsageColor()}88`,
+              transition: "width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)"
             }}
           />
         </div>
         <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          marginTop: "4px",
-          fontSize: "11px",
-          color: "rgba(245,245,245,0.7)"
-        }}>
-          <span>Used: {quota.estimated_used.toLocaleString()}</span>
-          <span>{getUsagePercentage()}%</span>
-          <span>Limit: {quota.daily_limit.toLocaleString()}</span>
+            display: "flex", 
+            justifyContent: "space-between", 
+            marginTop: "6px",
+            fontSize: "11px",
+            color: "rgba(245,245,245,0.7)"
+          }}>
+          <span>Used: <strong style={{ color: "#F5F5F5" }}>{quota.estimated_used.toLocaleString()}</strong> units ({getUsagePercentage()}%)</span>
+          <span>Limit: <strong style={{ color: "#F5F5F5" }}>{getEffectiveLimit().toLocaleString()}</strong>/mo</span>
         </div>
       </div>
 
@@ -270,7 +290,7 @@ export default function QuotaDisplay(): React.ReactElement {
               ? `~${(quota.comments_remaining / 1000).toFixed(1).replace(/\.0$/, '')}K`
               : `~${quota.comments_remaining}`}
           </div>
-          <div style={{ opacity: 0.8 }}>Comments</div>
+          <div style={{ opacity: 0.8 }}>Comments Left</div>
         </div>
       </div>
 
@@ -281,7 +301,7 @@ export default function QuotaDisplay(): React.ReactElement {
         color: "rgba(245,245,245,0.5)",
         textAlign: "center"
       }}>
-        Resets at midnight PT • ~{quota.videos_remaining} videos left
+        Resets on {quota.reset_time} • 100% Free Tier Protected
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ _last_analysis_cache: Dict[str, Any] = {}
 
 
 def _try_load_model() -> bool:
-    """Attempt to load the XLM-RoBERTa model. Returns True on success."""
+    """Attempt to initialize the active sentiment engine (Gemini or XLM-RoBERTa)."""
     global _sentiment_service, _model_ready, _model_loading
     if _model_ready:
         return True
@@ -50,14 +50,23 @@ def _try_load_model() -> bool:
         return False
 
     _model_loading = True
+    provider = (settings.SENTIMENT_PROVIDER or "gemini").lower().strip()
     try:
-        logger.info(f"Loading sentiment model from: {settings.MODEL_DIR}")
-        _sentiment_service = SentimentService.get()
-        _model_ready = True
-        logger.info("✅ XLM-RoBERTa model loaded successfully")
+        if provider == "gemini":
+            logger.info(f"Initializing Gemini Sentiment Engine ({settings.GEMINI_MODEL})...")
+            _sentiment_service = SentimentService.get("gemini")
+            _model_ready = True
+            logger.info("✅ Gemini Sentiment Engine (gemini-2.5-flash-lite) ready")
+        elif provider == "xlmr":
+            logger.info(f"Loading local XLM-RoBERTa model from: {settings.MODEL_DIR}")
+            _sentiment_service = SentimentService.get("xlmr")
+            _model_ready = True
+            logger.info("✅ XLM-RoBERTa model loaded successfully")
+        else:
+            raise ValueError(f"Unknown SENTIMENT_PROVIDER: '{provider}'")
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to load model: {e}")
+        logger.error(f"❌ Failed to initialize sentiment engine: {e}")
         _model_ready = False
         return False
     finally:
@@ -67,9 +76,8 @@ def _try_load_model() -> bool:
 # ─── Lifespan ────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model in background on startup so first request isn't slow."""
+    """Initialize sentiment engine and database on startup."""
     logger.info("🚀 Social Sentiment API starting up...")
-    # Load model in a thread pool to avoid blocking the event loop
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _try_load_model)
 
@@ -88,8 +96,8 @@ async def lifespan(app: FastAPI):
 # ─── FastAPI app ─────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Social Sentiment API",
-    version="2.0.0",
-    description="YouTube comment sentiment analysis using XLM-RoBERTa",
+    version="2.1.0",
+    description="YouTube comment sentiment analysis using Gemini 2.5 Flash-Lite & XLM-RoBERTa",
     lifespan=lifespan,
 )
 
@@ -109,8 +117,8 @@ class PredictRequest(BaseModel):
 
 class PredictResult(BaseModel):
     label: str
-    confidence: float
-    scores: Dict[str, float]
+    confidence: Optional[float] = None
+    scores: Optional[Dict[str, Optional[float]]] = None
 
 
 class PredictResponse(BaseModel):
@@ -180,6 +188,7 @@ def _run_analysis(
     Full pipeline: fetch → predict → visualize.
     progress_cb(step: str, pct: int) is called at each stage.
     """
+    global _last_analysis_cache
     start = time.time()
 
     def _emit(step: str, pct: int):
@@ -193,11 +202,91 @@ def _run_analysis(
     channel_title = video_info.get("channel_title", "Unknown Channel")
     total_comments = video_info.get("comment_count", 0)
 
-    # ── 2. Collect comments ──────────────────────────────────────────────────
-    _emit("Collecting comments from YouTube…", 15)
-    # Apply safety cap limit from settings to prevent server overload
+    # ── 2. Check Database Cache (Instant Re-use) ────────────────────────────
     raw_target = int(total_comments * percentage) if total_comments > 0 else 500
     max_comments = min(raw_target, settings.MAX_COMMENTS_LIMIT)
+
+    try:
+        from backend.db.session import get_session
+        from backend.db.models import Video, Comment, Prediction
+
+        with get_session() as db:
+            db_video = db.query(Video).filter_by(video_id=video_id).first()
+            if db_video:
+                db_comments = db.query(Comment).filter_by(video_pk=db_video.id).all()
+                if len(db_comments) >= min(max_comments, max(50, len(db_comments))):
+                    cached_analyzed = []
+                    cached_counts = {"positive": 0, "neutral": 0, "negative": 0}
+
+                    for c in db_comments:
+                        pred_obj = c.predictions[0] if c.predictions else None
+                        if pred_obj:
+                            lbl = pred_obj.label
+                            pred_dict = {
+                                "label": lbl,
+                                "confidence": pred_obj.confidence,
+                                "scores": {
+                                    "positive": pred_obj.positive_score,
+                                    "neutral": pred_obj.neutral_score,
+                                    "negative": pred_obj.negative_score,
+                                },
+                            }
+                            cached_analyzed.append({
+                                "comment_id": c.comment_id,
+                                "text": c.text,
+                                "author": c.author or "Anonymous",
+                                "published_at": c.commented_at or "",
+                                "like_count": c.like_count or 0,
+                                "is_reply": c.is_reply or False,
+                                "prediction": pred_dict,
+                            })
+                            if lbl in cached_counts:
+                                cached_counts[lbl] += 1
+
+                    if cached_analyzed:
+                        _emit(f"⚡ Instant Cache Hit! Loaded {len(cached_analyzed):,} comments from database…", 70)
+                        total_cached = cached_counts["positive"] + cached_counts["neutral"] + cached_counts["negative"]
+                        cached_ratios = {k: (v / total_cached if total_cached > 0 else 0.0) for k, v in cached_counts.items()}
+
+                        _emit("Generating visualizations…", 85)
+                        texts_for_viz = [c["text"] for c in cached_analyzed if c.get("text")]
+                        viz = _viz_service.generate_all(texts_for_viz, cached_counts)
+
+                        examples = []
+                        for sentiment in ["positive", "neutral", "negative"]:
+                            pool = [c for c in cached_analyzed if c["prediction"]["label"] == sentiment]
+                            pool.sort(key=lambda x: x.get("like_count", 0), reverse=True)
+                            examples.extend(pool[:5])
+
+                        processing_time = time.time() - start
+                        _emit("Complete!", 100)
+
+                        global _last_analysis_cache
+                        _last_analysis_cache = {
+                            "video_id": video_id,
+                            "percentage": percentage,
+                            "comments": cached_analyzed,
+                        }
+
+                        logger.info(f"⚡ Served analysis for {video_id} directly from PostgreSQL ({total_cached} comments, {processing_time:.2f}s)")
+                        return {
+                            "video_id": video_id,
+                            "video_title": db_video.title or video_title,
+                            "channel_title": db_video.channel_title or channel_title,
+                            "total_comments": total_comments or len(cached_analyzed),
+                            "actual_analyzed": total_cached,
+                            "percentage_analyzed": percentage,
+                            "counts": cached_counts,
+                            "ratios": cached_ratios,
+                            "examples": examples[:15],
+                            "processing_time": round(processing_time, 2),
+                            "visualizations": viz,
+                        }
+    except Exception as e:
+        logger.warning(f"Database cache check failed or skipped: {e}")
+
+    # ── 3. Collect comments from YouTube API ──────────────────────────────────
+    _emit("Collecting comments from YouTube…", 15)
     comments = fetch_youtube_comments(
         video_id=video_id,
         api_key=settings.YOUTUBE_API_KEY,
@@ -219,43 +308,55 @@ def _run_analysis(
     analyzed: List[Dict[str, Any]] = []
     counts = {"positive": 0, "neutral": 0, "negative": 0}
 
+    svc = SentimentService.get()
+    provider_name = getattr(svc, "provider_name", settings.SENTIMENT_PROVIDER)
+
+    def _sentiment_progress_cb(completed: int, total: int, step_desc: str):
+        # Scale progress smoothly between 40% and 75%
+        pct = 40 + int((completed / max(1, total)) * 35)
+        _emit(step_desc, pct)
+
     try:
-        svc = SentimentService.get()
-        predictions = svc.predict(comment_texts)
-        _emit("AI model running — processing predictions…", 65)
-
-        for i, comment in enumerate(comments):
-            pred = predictions[i] if i < len(predictions) else _rule_based_sentiment(comment.get("text", ""))
-            analyzed.append({
-                "text": comment.get("text", ""),
-                "author": comment.get("author", "Anonymous"),
-                "published_at": comment.get("published_at", ""),
-                "like_count": comment.get("like_count", 0),
-                "is_reply": comment.get("is_reply", False),
-                "prediction": pred,
-            })
-            counts[pred["label"]] += 1
-
-        logger.info("✅ Used XLM-RoBERTa for sentiment analysis")
-
+        _emit(f"AI model ({provider_name}) analyzing {len(comment_texts)} comments in batches…", 40)
+        predictions = svc.predict(comment_texts, progress_cb=_sentiment_progress_cb)
     except Exception as e:
-        logger.warning(f"Model failed, using rule-based fallback: {e}")
-        _emit("Using rule-based fallback model…", 65)
+        logger.error(f"❌ Sentiment analysis failed ({provider_name}): {e}", exc_info=True)
+        # STRICT: Never silently convert failed batches to fake neutral
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sentiment analysis failed ({provider_name}): {str(e)}"
+        )
 
-        for comment in comments:
-            pred = _rule_based_sentiment(comment.get("text", ""))
-            analyzed.append({
-                "text": comment.get("text", ""),
-                "author": comment.get("author", "Anonymous"),
-                "published_at": comment.get("published_at", ""),
-                "like_count": comment.get("like_count", 0),
-                "is_reply": comment.get("is_reply", False),
-                "prediction": pred,
-            })
-            counts[pred["label"]] += 1
+    failed_count = 0
+    for i, comment in enumerate(comments):
+        pred = predictions[i] if i < len(predictions) else {"label": "unclassified", "confidence": None, "scores": None}
+        analyzed.append({
+            "text": comment.get("text", ""),
+            "author": comment.get("author", "Anonymous"),
+            "published_at": comment.get("published_at", ""),
+            "like_count": comment.get("like_count", 0),
+            "is_reply": comment.get("is_reply", False),
+            "prediction": pred,
+        })
+        label = pred.get("label", "")
+        if label in counts:
+            counts[label] += 1
+        else:
+            failed_count += 1
 
-    total_analyzed = len(analyzed)
-    ratios = {k: (v / total_analyzed if total_analyzed > 0 else 0.0) for k, v in counts.items()}
+    total_successful = counts["positive"] + counts["neutral"] + counts["negative"]
+    if total_successful == 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sentiment analysis failed to classify any comments ({provider_name})."
+        )
+
+    total_analyzed = total_successful
+    ratios = {k: (v / total_successful if total_successful > 0 else 0.0) for k, v in counts.items()}
+    if failed_count > 0:
+        logger.warning(f"⚠️ {failed_count} comments were unclassified and excluded from sentiment analytics.")
+
+    logger.info(f"✅ Completed sentiment analysis using {provider_name} ({total_successful} analyzed, {failed_count} unclassified)")
 
     # ── 4. Generate visualizations ───────────────────────────────────────────
     _emit("Generating visualizations…", 80)
@@ -274,7 +375,6 @@ def _run_analysis(
     _emit("Complete!", 100)
 
     # Cache the full comments list for instant CSV generation
-    global _last_analysis_cache
     _last_analysis_cache = {
         "video_id": video_id,
         "percentage": percentage,
@@ -305,16 +405,35 @@ def root():
 
 @app.get("/health")
 def health_check():
+    curr_settings = get_settings()
+    provider = (curr_settings.SENTIMENT_PROVIDER or "gemini").lower()
+
+    # Check DB connectivity
+    db_connected = False
+    try:
+        from backend.db.session import get_session
+        from sqlalchemy import text
+        with get_session() as db:
+            db.execute(text("SELECT 1"))
+            db_connected = True
+    except Exception:
+        db_connected = False
+
     return {
         "status": "healthy",
+        "provider": provider,
+        "model": curr_settings.GEMINI_MODEL if provider == "gemini" else "xlmr-sentiment",
         "model_ready": _model_ready,
-        "youtube_api_configured": bool(settings.YOUTUBE_API_KEY),
+        "database_connected": db_connected,
+        "gemini_api_configured": bool(curr_settings.GEMINI_API_KEY),
+        "youtube_api_configured": bool(curr_settings.YOUTUBE_API_KEY),
+        "rate_limit_protection": "15 RPM Free Tier Safe",
     }
 
 
-# Helper to check daily quota limit
+# Helper to check monthly and daily quota limits
 def _check_quota_or_raise():
-    """Check daily quota limit (from settings.DAILY_QUOTA_LIMIT). Raises HTTP 429 if exceeded."""
+    """Check monthly and daily quota limits to guarantee 100% Free Tier protection."""
     try:
         from backend.db.session import get_db
         from sqlalchemy import func
@@ -323,16 +442,29 @@ def _check_quota_or_raise():
 
         db = next(get_db())
         today = date.today()
-        used = db.query(func.sum(QuotaUsage.units_used)).filter(
+        first_day_of_month = today.replace(day=1)
+
+        used_month = db.query(func.sum(QuotaUsage.units_used)).filter(
+            QuotaUsage.date >= first_day_of_month
+        ).scalar() or 0
+
+        used_today = db.query(func.sum(QuotaUsage.units_used)).filter(
             QuotaUsage.date == today
         ).scalar() or 0
         db.close()
 
-        daily_limit = settings.DAILY_QUOTA_LIMIT
-        if used >= daily_limit:
+        monthly_limit = settings.MONTHLY_QUOTA_LIMIT
+        if used_month >= monthly_limit:
             raise HTTPException(
                 status_code=429,
-                detail="Daily API quota limit exceeded. Please try again tomorrow.",
+                detail="Monthly Free Tier API quota limit reached. Quota resets on the 1st of next month.",
+            )
+
+        daily_limit = settings.DAILY_QUOTA_LIMIT
+        if used_today >= daily_limit:
+            raise HTTPException(
+                status_code=429,
+                detail="Daily safety API limit reached. Please try again tomorrow.",
             )
     except HTTPException:
         raise
@@ -465,8 +597,8 @@ def predict_sentiment(body: PredictRequest):
         preds = svc.predict(body.texts)
         results = preds
     except Exception as e:
-        logger.warning(f"Model unavailable, using rule-based: {e}")
-        results = [_rule_based_sentiment(t) for t in body.texts]
+        logger.error(f"Sentiment prediction failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
     return PredictResponse(results=[PredictResult(**r) for r in results])
 
@@ -512,7 +644,20 @@ async def download_csv(
     
     for c in comments_to_write:
         pred = c.get("prediction", {})
-        scores = pred.get("scores", {})
+        scores = pred.get("scores") or {}
+        
+        conf_val = pred.get("confidence")
+        conf_str = f"{conf_val:.4f}" if isinstance(conf_val, (int, float)) else ""
+        
+        pos_val = scores.get("positive")
+        pos_str = f"{pos_val:.4f}" if isinstance(pos_val, (int, float)) else ""
+        
+        neu_val = scores.get("neutral")
+        neu_str = f"{neu_val:.4f}" if isinstance(neu_val, (int, float)) else ""
+        
+        neg_val = scores.get("negative")
+        neg_str = f"{neg_val:.4f}" if isinstance(neg_val, (int, float)) else ""
+
         writer.writerow([
             c.get("author", ""),
             c.get("text", "").replace("\n", " "),
@@ -520,10 +665,10 @@ async def download_csv(
             c.get("is_reply", False),
             c.get("published_at", ""),
             pred.get("label", ""),
-            round(pred.get("confidence", 0), 4),
-            round(scores.get("positive", 0), 4),
-            round(scores.get("neutral", 0), 4),
-            round(scores.get("negative", 0), 4),
+            conf_str,
+            pos_str,
+            neu_str,
+            neg_str,
         ])
 
     output.seek(0)
@@ -538,7 +683,9 @@ async def download_csv(
 # ── Quota endpoint ────────────────────────────────────────────────────────────
 @app.get("/api/quota")
 def get_quota():
-    """YouTube API quota status (tracks via DB if available, else static estimate)."""
+    """API quota status for Free Tier usage protection (tracks via DB if available)."""
+    used_month = 0
+    used_today = 0
     try:
         from backend.db.session import get_db
         from sqlalchemy import func
@@ -547,45 +694,65 @@ def get_quota():
 
         db = next(get_db())
         today = date.today()
-        used = db.query(func.sum(QuotaUsage.units_used)).filter(
+        first_day_of_month = today.replace(day=1)
+
+        used_month = db.query(func.sum(QuotaUsage.units_used)).filter(
+            QuotaUsage.date >= first_day_of_month
+        ).scalar() or 0
+
+        used_today = db.query(func.sum(QuotaUsage.units_used)).filter(
             QuotaUsage.date == today
         ).scalar() or 0
         db.close()
     except Exception:
-        used = 0  # DB not available — show 0 usage
+        used_month = 0
+        used_today = 0
 
+    monthly_limit = settings.MONTHLY_QUOTA_LIMIT
     daily_limit = settings.DAILY_QUOTA_LIMIT
-    remaining = max(0, daily_limit - used)
+
+    monthly_remaining = max(0, monthly_limit - used_month)
+    daily_remaining = max(0, daily_limit - used_today)
+    credits_remaining = min(monthly_remaining, daily_remaining)
 
     from datetime import datetime, timedelta, timezone
     try:
         from zoneinfo import ZoneInfo
         pacific = ZoneInfo("US/Pacific")
         now = datetime.now(pacific)
-        tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        reset_time = tomorrow.strftime("%Y-%m-%d %H:%M:%S %Z")
+        # Next month 1st
+        if now.month == 12:
+            next_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            next_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        reset_time = next_month.strftime("%b 1, %Y 00:00 %Z")
     except Exception:
-        reset_time = "Tomorrow 00:00 PT"
+        reset_time = "1st of next month"
 
     return {
+        "period": "monthly",
+        "monthly_limit": monthly_limit,
         "daily_limit": daily_limit,
-        "estimated_used": int(used),
-        "estimated_remaining": remaining,
+        "estimated_used": int(used_month),
+        "estimated_remaining": monthly_remaining,
+        "credits_remaining": credits_remaining,
+        "comments_remaining": monthly_remaining * 100,
+        "videos_remaining": monthly_remaining // 2,
         "reset_time": reset_time,
-        "credits_remaining": remaining,
-        "comments_remaining": remaining * 100,
-        "videos_remaining": remaining // 2,
         "last_updated": datetime.now(timezone.utc).isoformat(),
     }
 
 
 # ─── Optional: save to DB ────────────────────────────────────────────────────
 def _try_save_to_db(result: Dict) -> None:
-    """Attempt to save analysis results to DB. Silently skips if DB unavailable."""
+    """Save all analyzed comments, predictions, and quota usage into PostgreSQL."""
     try:
         from backend.db.session import get_session
         from backend.db.models import Video, Comment, Prediction, QuotaUsage
         from datetime import date
+
+        provider = (settings.SENTIMENT_PROVIDER or "gemini").lower()
+        model_name = settings.GEMINI_MODEL if provider == "gemini" else "xlmr-sentiment"
 
         with get_session() as db:
             # Upsert video
@@ -598,39 +765,58 @@ def _try_save_to_db(result: Dict) -> None:
                 )
                 db.add(video)
                 db.flush()
+            else:
+                video.title = result["video_title"]
+                video.channel_title = result["channel_title"]
+                db.flush()
 
-            # Save example comments + predictions
-            for ex in result.get("examples", []):
-                # Skip if already exists
-                existing = db.query(Comment).filter_by(
-                    comment_id=ex.get("text", "")[:64]
-                ).first()
-                if existing:
+            # Retrieve all comments to persist
+            comments_to_save = []
+            if _last_analysis_cache and _last_analysis_cache.get("video_id") == result["video_id"]:
+                comments_to_save = _last_analysis_cache.get("comments", [])
+            if not comments_to_save:
+                comments_to_save = result.get("examples", [])
+
+            # Existing comment IDs in DB to prevent duplicates
+            existing_cids = {
+                c.comment_id for c in db.query(Comment.comment_id).filter_by(video_pk=video.id).all()
+            }
+
+            saved_count = 0
+            for item in comments_to_save:
+                text = item.get("text", "")
+                if not text:
+                    continue
+                cid = item.get("comment_id") or str(abs(hash(text)))
+                if cid in existing_cids:
                     continue
 
                 comment = Comment(
                     video_pk=video.id,
-                    comment_id=str(hash(ex.get("text", ""))),
-                    author=ex.get("author", ""),
-                    text=ex.get("text", ""),
-                    like_count=ex.get("like_count", 0),
-                    is_reply=ex.get("is_reply", False),
-                    commented_at=ex.get("published_at", ""),
+                    comment_id=cid,
+                    author=item.get("author", "Anonymous")[:256],
+                    text=text,
+                    like_count=item.get("like_count", 0),
+                    is_reply=item.get("is_reply", False),
+                    commented_at=item.get("published_at", "")[:64],
                 )
                 db.add(comment)
                 db.flush()
+                existing_cids.add(cid)
 
-                pred = ex.get("prediction", {})
-                scores = pred.get("scores", {})
+                pred = item.get("prediction", {})
+                scores = pred.get("scores") or {}
                 prediction = Prediction(
                     comment_pk=comment.id,
+                    model_name=model_name,
                     label=pred.get("label", "neutral"),
-                    confidence=pred.get("confidence", 0.0),
-                    positive_score=scores.get("positive", 0.0),
-                    neutral_score=scores.get("neutral", 0.0),
-                    negative_score=scores.get("negative", 0.0),
+                    confidence=pred.get("confidence"),
+                    positive_score=scores.get("positive"),
+                    neutral_score=scores.get("neutral"),
+                    negative_score=scores.get("negative"),
                 )
                 db.add(prediction)
+                saved_count += 1
 
             # Calculate estimated YouTube API quota units used:
             # 1 unit for video metadata list + 1 unit per 100 comments/replies fetched
@@ -646,6 +832,7 @@ def _try_save_to_db(result: Dict) -> None:
                 meta_data={"percentage": result.get("percentage_analyzed")},
             )
             db.add(usage)
+            logger.info(f"💾 Persisted {saved_count} comments & predictions for {result['video_id']} in PostgreSQL.")
 
     except Exception as e:
         logger.warning(f"DB save skipped: {e}")

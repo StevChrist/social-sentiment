@@ -1,0 +1,12 @@
+# backend/requirements-benchmark.txt — Offline Research & Benchmark Dependencies
+# Includes local PyTorch + Hugging Face Transformers for XLM-RoBERTa evaluation.
+# Install via: pip install -r backend/requirements-benchmark.txt
+
+-r requirements.txt
+
+# PyTorch & HuggingFace Transformers (Offline Evaluation Only)
+torch>=2.2.0
+transformers>=4.40.0
+sentencepiece>=0.2.0
+protobuf>=4.0,<6
+scikit-learn>=1.4.0

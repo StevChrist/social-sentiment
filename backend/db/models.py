@@ -48,10 +48,10 @@ class Prediction(Base):
     comment_pk: Mapped[int] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"), index=True)
     model_name: Mapped[str] = mapped_column(String(64), default="xlmr-sentiment")
     label: Mapped[str] = mapped_column(String(16))  # 'negative' | 'neutral' | 'positive'
-    confidence: Mapped[float] = mapped_column(Float)
-    negative_score: Mapped[float] = mapped_column(Float)
-    neutral_score: Mapped[float] = mapped_column(Float)
-    positive_score: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    negative_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    neutral_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    positive_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     predicted_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships

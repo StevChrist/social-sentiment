@@ -18,7 +18,7 @@
 
 ## 📖 Description
 
-**SocialSentiment** is an AI-powered web application that analyzes the sentiment of YouTube video comments in real time. By simply pasting a YouTube video URL, the platform automatically fetches public comments and classifies each one as **Positive**, **Neutral**, or **Negative** using a fine-tuned **XLM-RoBERTa** multilingual deep learning model. The results are presented through interactive visualizations — including a Word Cloud, Pie Chart, and Bar Chart — along with a downloadable CSV report, making it easy to understand audience reactions and feedback at scale.
+**SocialSentiment** is an AI-powered web application that analyzes the sentiment of YouTube video comments in real time. By simply pasting a YouTube video URL, the platform automatically fetches public comments and classifies each one as **Positive**, **Neutral**, or **Negative** using Google's **Gemini 2.5 Flash-Lite** model in production via batch processing and structured JSON schemas. The platform also preserves a fine-tuned **XLM-RoBERTa** multilingual deep learning model for offline research and evaluation benchmarks. Results are presented through interactive visualizations — including a Word Cloud, Pie Chart, and Bar Chart — along with a downloadable CSV report.
 
 ---
 
@@ -27,11 +27,11 @@
 ### Backend
 | Technology | Description |
 |---|---|
-| **Python 3.14** | Core backend language |
+| **Python 3.12+** | Core backend language |
 | **FastAPI** | REST API framework with SSE streaming |
-| **XLM-RoBERTa** | Multilingual sentiment classification model (fine-tuned) |
-| **HuggingFace Transformers** | Model loading and inference |
-| **PyTorch** | Deep learning inference engine |
+| **Google Gemini 2.5 Flash-Lite** | Production AI sentiment engine (Free Tier with batching) |
+| **Google GenAI SDK** | Structured JSON output classification |
+| **XLM-RoBERTa (PyTorch)** | Multilingual model for offline evaluation & benchmarks |
 | **SQLAlchemy + PostgreSQL** | Database ORM and quota/result storage |
 | **Matplotlib + WordCloud** | Server-side chart and word cloud generation |
 | **Docker Compose** | PostgreSQL containerization |
@@ -108,34 +108,41 @@ The **API Credits** card on the website updates in real time and shows your rema
 
 ---
 
-## ℹ️ About
+## ℹ️ About & Architecture
+ 
+**SocialSentiment** combines cutting-edge Large Language Models with modern full-stack web development:
+- ⚡ **Production Engine:** Uses Google Gemini 2.5 Flash-Lite Free Tier with dual-constraint batching, delivering fast analysis with minimal server memory footprint (<250MB RAM).
+- 🔬 **Offline Benchmark Suite:** Evaluates Gemini 2.5 Flash-Lite against fine-tuned XLM-RoBERTa on ground-truth datasets with metrics for Accuracy, Macro F1, Confusion Matrices, Cohen's Kappa, and throughput.
+ 
+### Running Offline Benchmarks
+```bash
+# Run benchmark comparing Ground Truth vs XLM-RoBERTa and Gemini
+python -m backend.scripts.benchmark_sentiment
 
-**SocialSentiment** was built as a personal portfolio project to explore the intersection of Natural Language Processing, multilingual AI models, and modern full-stack web development. The XLM-RoBERTa model was fine-tuned on a custom dataset of YouTube comments in Indonesian and English, achieving:
-
-- ✅ **Validation Accuracy:** 83.3%
-- ✅ **Macro F1-Score:** 82.3%
-- ✅ **Test Accuracy:** 71.9%
-
-The platform is designed to be a practical tool for content creators and researchers who want to quickly gauge audience sentiment without manually reading thousands of comments.
-
+# Or run with a custom CSV dataset
+python -m backend.scripts.benchmark_sentiment --dataset path/to/dataset.csv --gemini-batch-size 20
+```
+ 
 ---
-
+ 
 ## 🙏 Credits
-
+ 
 | Resource | Usage |
 |---|---|
-| [XLM-RoBERTa (Facebook AI)](https://huggingface.co/FacebookAI/xlm-roberta-base) | Base multilingual transformer model |
+| [Google Gemini 2.5 Flash-Lite](https://ai.google.dev/) | Production sentiment classification model |
+| [Google GenAI SDK](https://github.com/google-gemini/google-genai) | Structured output inference client |
+| [XLM-RoBERTa (Facebook AI)](https://huggingface.co/FacebookAI/xlm-roberta-base) | Base multilingual transformer model for offline research |
 | [HuggingFace Transformers](https://huggingface.co/docs/transformers) | Model loading and inference pipeline |
 | [YouTube Data API v3](https://developers.google.com/youtube/v3) | Fetching video comments |
 | [FastAPI](https://fastapi.tiangolo.com/) | High-performance Python API framework |
 | [Next.js](https://nextjs.org/) | React web framework |
 | [Matplotlib](https://matplotlib.org/) | Chart generation |
 | [WordCloud](https://github.com/amueller/word_cloud) | Word cloud generation |
-
+ 
 ---
-
+ 
 <div align="center">
-
+ 
 **StevChrist**
-
+ 
 </div>
